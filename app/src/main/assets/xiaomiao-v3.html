@@ -1035,8 +1035,8 @@ let currentAudio = null;
 
 async function speak(text) {
   // Android native TTS bridge (WebView App)
-  if (window.AndroidTTS) {
-    AndroidTTS.speak(text);
+  if (window.AndroidBridge) {
+    AndroidBridge.speak(text);
     return;
   }
   if (ttsMode === 'volcengine') {
@@ -1068,6 +1068,19 @@ function browserSpeak(text) {
 // Speech recognition
 let recognition = null;
 let listening = false;
+
+// Native Android speech callback
+window._onSpeechResult = function(text) {
+  document.getElementById('micBtn').classList.remove('listening');
+  listening = false;
+  childSay(text);
+};
+window._onSpeechError = function() {
+  document.getElementById('micBtn').classList.remove('listening');
+  listening = false;
+  speak('没听清楚，打字也可以哦~');
+};
+
 function initRecognition() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) return false;
@@ -1091,6 +1104,20 @@ function initRecognition() {
   return true;
 }
 function toggleMic() {
+  // Use native Android speech recognition if available
+  if (window.AndroidBridge) {
+    if (listening) {
+      AndroidBridge.stopListening();
+      document.getElementById('micBtn').classList.remove('listening');
+      listening = false;
+    } else {
+      AndroidBridge.startListening();
+      document.getElementById('micBtn').classList.add('listening');
+      listening = true;
+    }
+    return;
+  }
+  // Fallback to browser Web Speech API
   if (!recognition && !initRecognition()) { speak('这个设备不支持语音输入'); return; }
   if (listening) { recognition.stop(); document.getElementById('micBtn').classList.remove('listening'); listening = false; }
   else { recognition.start(); document.getElementById('micBtn').classList.add('listening'); listening = true; }
