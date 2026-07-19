@@ -978,6 +978,10 @@ function previewVoice(idx) {
 }
 
 function refreshVoices() {
+  if (window.AndroidBridge) {
+    alert('App 直接使用系统自带的语音引擎，这里不需要选择声音。\n想换声音的话，到 Pad 的 系统设置 → 辅助功能 → 文字转语音输出 里更换。');
+    return;
+  }
   if (!synth) {
     alert('您的浏览器不支持语音合成。');
     return;
@@ -1003,6 +1007,11 @@ function refreshVoices() {
 }
 
 function toggleSpeak() {
+  if (window.AndroidBridge) {
+    if (AndroidBridge.isSpeaking()) { AndroidBridge.stop(); }
+    else { speak(PERSONAS[currentPersona].greeting); }
+    return;
+  }
   if (!synth) return;
   if (synth.speaking) { synth.cancel(); }
   else { speak(PERSONAS[currentPersona].greeting); }
