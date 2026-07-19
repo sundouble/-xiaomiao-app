@@ -1107,13 +1107,18 @@ function toggleMic() {
   // Use native Android speech recognition if available
   if (window.AndroidBridge) {
     if (listening) {
-      AndroidBridge.stopListening();
+      try { AndroidBridge.stopListening(); } catch (e) {}
       document.getElementById('micBtn').classList.remove('listening');
       listening = false;
     } else {
-      AndroidBridge.startListening();
-      document.getElementById('micBtn').classList.add('listening');
-      listening = true;
+      let ok = false;
+      try { ok = AndroidBridge.startListening(); } catch (e) { ok = false; }
+      if (ok) {
+        document.getElementById('micBtn').classList.add('listening');
+        listening = true;
+      } else {
+        speak('这个设备不支持语音输入，先用打字聊天吧');
+      }
     }
     return;
   }

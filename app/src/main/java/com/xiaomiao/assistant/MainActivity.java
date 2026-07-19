@@ -67,8 +67,7 @@ public class MainActivity extends Activity {
                     }
                 }
                 @Override public void onError(int error) {
-                    webView.post(() -> webView.evaluateJavascript(
-                        "if(window._onSpeechError) window._onSpeechError()", null));
+                    notifySpeechError();
                 }
                 @Override public void onReadyForSpeech(Bundle params) {}
                 @Override public void onBeginningOfSpeech() {}
@@ -92,17 +91,30 @@ public class MainActivity extends Activity {
             public boolean isSpeaking() { return tts.isSpeaking(); }
 
             @JavascriptInterface
-            public void startListening() {
-                if (recognizer == null) return;
-                Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-                intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-                intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN");
-                intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
-                recognizer.startListening(intent);
+            public boolean hasRecognizer() { return recognizer != null; }
+
+            @JavascriptInterface
+            public boolean startListening() {
+                if (recognizer == null) return false;
+                runOnUiThread(() -> {
+                    try {
+                        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+                        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+                        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN");
+                        intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+                        recognizer.startListening(intent);
+                    } catch (Exception e) {
+                        notifySpeechError();
+                    }
+                });
+                return true;
             }
             @JavascriptInterface
             public void stopListening() {
-                if (recognizer != null) recognizer.stopListening();
+                if (recognizer == null) return;
+                runOnUiThread(() -> {
+                    try { recognizer.stopListening(); } catch (Exception ignored) {}
+                });
             }
         }, "AndroidBridge");
 
@@ -111,6 +123,11 @@ public class MainActivity extends Activity {
 
     private String escapeJs(String s) {
         return s.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n");
+    }
+
+    private void notifySpeechError() {
+        webView.post(() -> webView.evaluateJavascript(
+            "if(window._onSpeechError) window._onSpeechError()", null));
     }
 
     @Override
