@@ -16,6 +16,8 @@ import android.webkit.JavascriptInterface;
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.provider.Settings;
+import android.net.Uri;
 import java.util.Locale;
 import java.util.ArrayList;
 import java.util.List;
@@ -119,7 +121,18 @@ public class MainActivity extends Activity {
             public boolean startListening() {
                 if (!recognitionAvailable) return false;
                 if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                    runOnUiThread(() -> requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_RECORD));
+                    runOnUiThread(() -> {
+                        if (shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)) {
+                            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_RECORD);
+                        } else {
+                            // Permanently denied (or HarmonyOS auto-deny) — system dialog won't show; open app settings
+                            try {
+                                Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    Uri.parse("package:" + getPackageName()));
+                                startActivity(i);
+                            } catch (Exception ignored) {}
+                        }
+                    });
                     return false;
                 }
                 runOnUiThread(() -> startRecognizer());
