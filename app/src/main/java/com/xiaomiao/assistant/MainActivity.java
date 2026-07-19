@@ -14,8 +14,10 @@ import android.webkit.WebChromeClient;
 import android.webkit.PermissionRequest;
 import android.webkit.JavascriptInterface;
 import android.Manifest;
+import android.content.ComponentName;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.content.pm.ServiceInfo;
 import android.provider.Settings;
 import android.net.Uri;
 import java.util.Locale;
@@ -28,6 +30,7 @@ public class MainActivity extends Activity {
     private SpeechRecognizer recognizer;
     private RecognitionListener recognitionListener;
     private boolean recognitionAvailable;
+    private ComponentName recognizerComponent;
     private static final int REQ_RECORD = 1001;
 
     @Override
@@ -63,6 +66,13 @@ public class MainActivity extends Activity {
 
         // ASR (Speech Recognition) — recognizer is recreated fresh on each startListening
         recognitionAvailable = SpeechRecognizer.isRecognitionAvailable(this);
+        // Find the actual recognition service so we can bind to it explicitly (Huawei devices often require this)
+        List<ResolveInfo> asrServices = getPackageManager().queryIntentServices(
+            new Intent(RecognitionService.SERVICE_INTERFACE), 0);
+        if (!asrServices.isEmpty()) {
+            ServiceInfo si = asrServices.get(0).serviceInfo;
+            recognizerComponent = new ComponentName(si.packageName, si.name);
+        }
         recognitionListener = new RecognitionListener() {
             @Override public void onResults(Bundle results) {
                 ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
@@ -156,7 +166,11 @@ public class MainActivity extends Activity {
                 try { recognizer.destroy(); } catch (Exception ignored) {}
                 recognizer = null;
             }
-            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            if (recognizerComponent != null) {
+                recognizer = SpeechRecognizer.createSpeechRecognizer(this, recognizerComponent);
+            } else {
+                recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            }
             recognizer.setRecognitionListener(recognitionListener);
             Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
