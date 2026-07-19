@@ -21,6 +21,8 @@ public class MainActivity extends Activity {
     private WebView webView;
     private TextToSpeech tts;
     private SpeechRecognizer recognizer;
+    private RecognitionListener recognitionListener;
+    private boolean recognitionAvailable;
     private static final int REQ_RECORD = 1001;
 
     @Override
@@ -54,31 +56,30 @@ public class MainActivity extends Activity {
             if (status == TextToSpeech.SUCCESS) tts.setLanguage(Locale.CHINESE);
         });
 
-        // ASR (Speech Recognition)
-        if (SpeechRecognizer.isRecognitionAvailable(this)) {
-            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
-            recognizer.setRecognitionListener(new RecognitionListener() {
-                @Override public void onResults(Bundle results) {
-                    ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                    if (matches != null && matches.size() > 0) {
-                        final String text = matches.get(0);
-                        webView.post(() -> webView.evaluateJavascript(
-                            "if(window._onSpeechResult) window._onSpeechResult('" + escapeJs(text) + "')", null));
-                    }
+        // ASR (Speech Recognition) — recognizer is recreated fresh on each startListening
+        recognitionAvailable = SpeechRecognizer.isRecognitionAvailable(this);
+        recognitionListener = new RecognitionListener() {
+            @Override public void onResults(Bundle results) {
+                ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                if (matches != null && matches.size() > 0) {
+                    final String text = matches.get(0);
+                    webView.post(() -> webView.evaluateJavascript(
+                        "if(window._onSpeechResult) window._onSpeechResult('" + escapeJs(text) + "')", null));
+                } else {
+                    notifySpeechError(7);
                 }
-                @Override public void onError(int error) {
-                    try { recognizer.cancel(); } catch (Exception ignored) {}
-                    notifySpeechError(error);
-                }
-                @Override public void onReadyForSpeech(Bundle params) {}
-                @Override public void onBeginningOfSpeech() {}
-                @Override public void onRmsChanged(float rmsdB) {}
-                @Override public void onBufferReceived(byte[] buffer) {}
-                @Override public void onEndOfSpeech() {}
-                @Override public void onPartialResults(Bundle results) {}
-                @Override public void onEvent(int eventType, Bundle params) {}
-            });
-        }
+            }
+            @Override public void onError(int error) {
+                notifySpeechError(error);
+            }
+            @Override public void onReadyForSpeech(Bundle params) {}
+            @Override public void onBeginningOfSpeech() {}
+            @Override public void onRmsChanged(float rmsdB) {}
+            @Override public void onBufferReceived(byte[] buffer) {}
+            @Override public void onEndOfSpeech() {}
+            @Override public void onPartialResults(Bundle results) {}
+            @Override public void onEvent(int eventType, Bundle params) {}
+        };
 
         // Bridge: TTS + ASR
         webView.addJavascriptInterface(new Object() {
@@ -92,26 +93,16 @@ public class MainActivity extends Activity {
             public boolean isSpeaking() { return tts.isSpeaking(); }
 
             @JavascriptInterface
-            public boolean hasRecognizer() { return recognizer != null; }
+            public boolean hasRecognizer() { return recognitionAvailable; }
 
             @JavascriptInterface
             public boolean startListening() {
-                if (recognizer == null) return false;
+                if (!recognitionAvailable) return false;
                 if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                     runOnUiThread(() -> requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_RECORD));
                     return false;
                 }
-                runOnUiThread(() -> {
-                    try {
-                        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-                        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-                        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN");
-                        intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
-                        recognizer.startListening(intent);
-                    } catch (Exception e) {
-                        notifySpeechError(-1);
-                    }
-                });
+                runOnUiThread(() -> startRecognizer());
                 return true;
             }
             @JavascriptInterface
@@ -124,6 +115,24 @@ public class MainActivity extends Activity {
         }, "AndroidBridge");
 
         webView.loadUrl("file:///android_asset/xiaomiao-v3.html");
+    }
+
+    private void startRecognizer() {
+        try {
+            if (recognizer != null) {
+                try { recognizer.destroy(); } catch (Exception ignored) {}
+                recognizer = null;
+            }
+            recognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            recognizer.setRecognitionListener(recognitionListener);
+            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN");
+            intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+            recognizer.startListening(intent);
+        } catch (Exception e) {
+            notifySpeechError(-1);
+        }
     }
 
     private String escapeJs(String s) {
