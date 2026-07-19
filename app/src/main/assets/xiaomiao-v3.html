@@ -467,6 +467,11 @@ const chatEl = document.getElementById('chat');
 const inputEl = document.getElementById('userInput');
 let isGenerating = false;
 
+// Surface any unexpected JS error in the chat (for diagnosing issues on devices without console access)
+window.onerror = function(msg, src, line) {
+  try { addMessage('⚠️ 程序出错了：' + msg + '（第' + line + '行）请截图发给爸爸', 'her'); } catch (e) {}
+};
+
 let lastMsgDate = '';
 
 function addMessage(text, who) {
@@ -780,20 +785,28 @@ async function callAPI(userMessage) {
   // Add current message
   messages.push({ role: 'user', content: finalMessage });
 
-  const response = await fetch(apiUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + apiKey,
-    },
-    body: JSON.stringify({
-      model: model,
-      messages: messages,
-      temperature: temp,
-      max_tokens: 600,
-      stream: false,
-    }),
-  });
+  const ctrl = new AbortController();
+  const timeout = setTimeout(() => ctrl.abort(), 30000);
+  let response;
+  try {
+    response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + apiKey,
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: messages,
+        temperature: temp,
+        max_tokens: 600,
+        stream: false,
+      }),
+      signal: ctrl.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     const errText = await response.text();
@@ -808,6 +821,14 @@ async function callAPI(userMessage) {
 // CHILD INTERACTION
 // ============================================================
 async function childSay(text) {
+  try {
+    await _childSay(text);
+  } catch (e) {
+    isGenerating = false;
+    addMessage('⚠️ 发送失败：' + e.message + '。请截图发给爸爸', 'her');
+  }
+}
+async function _childSay(text) {
   if (!text || !text.trim() || isGenerating) return;
   text = text.trim();
   inputEl.value = '';
@@ -1075,9 +1096,16 @@ window._onSpeechResult = function(text) {
   listening = false;
   childSay(text);
 };
-window._onSpeechError = function() {
+window._onSpeechError = function(code) {
   document.getElementById('micBtn').classList.remove('listening');
   listening = false;
+  const reasons = {
+    '-1': '语音识别启动失败', 1: '网络超时', 2: '网络连接问题', 3: '录音失败',
+    4: '识别服务器错误', 5: '这台设备没有语音识别服务', 6: '没有听到声音',
+    7: '没有听清楚', 8: '识别器忙', 9: '没有麦克风权限，请在系统设置里允许小喵使用麦克风'
+  };
+  const why = reasons[String(code)] || ('未知错误 ' + code);
+  addMessage('🎤 语音输入没成功：' + why + '（代码 ' + code + '）', 'her');
   speak('没听清楚，打字也可以哦~');
 };
 
@@ -1117,7 +1145,7 @@ function toggleMic() {
         document.getElementById('micBtn').classList.add('listening');
         listening = true;
       } else {
-        speak('这个设备不支持语音输入，先用打字聊天吧');
+        addMessage('🎤 需要麦克风权限：请在弹窗里点"允许"，然后再按一次麦克风。如果没有弹窗，说明这台设备不支持语音输入。', 'her');
       }
     }
     return;

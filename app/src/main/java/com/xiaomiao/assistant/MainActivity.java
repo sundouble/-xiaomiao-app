@@ -67,7 +67,8 @@ public class MainActivity extends Activity {
                     }
                 }
                 @Override public void onError(int error) {
-                    notifySpeechError();
+                    try { recognizer.cancel(); } catch (Exception ignored) {}
+                    notifySpeechError(error);
                 }
                 @Override public void onReadyForSpeech(Bundle params) {}
                 @Override public void onBeginningOfSpeech() {}
@@ -96,6 +97,10 @@ public class MainActivity extends Activity {
             @JavascriptInterface
             public boolean startListening() {
                 if (recognizer == null) return false;
+                if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    runOnUiThread(() -> requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQ_RECORD));
+                    return false;
+                }
                 runOnUiThread(() -> {
                     try {
                         Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
@@ -104,7 +109,7 @@ public class MainActivity extends Activity {
                         intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
                         recognizer.startListening(intent);
                     } catch (Exception e) {
-                        notifySpeechError();
+                        notifySpeechError(-1);
                     }
                 });
                 return true;
@@ -125,9 +130,9 @@ public class MainActivity extends Activity {
         return s.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n");
     }
 
-    private void notifySpeechError() {
+    private void notifySpeechError(int code) {
         webView.post(() -> webView.evaluateJavascript(
-            "if(window._onSpeechError) window._onSpeechError()", null));
+            "if(window._onSpeechError) window._onSpeechError(" + code + ")", null));
     }
 
     @Override
