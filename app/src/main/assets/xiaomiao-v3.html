@@ -1091,12 +1091,34 @@ let recognition = null;
 let listening = false;
 
 // Native Android speech callback
+let speechStageTimer = null;
 window._onSpeechResult = function(text) {
+  if (speechStageTimer) { clearTimeout(speechStageTimer); speechStageTimer = null; }
   document.getElementById('micBtn').classList.remove('listening');
   listening = false;
   childSay(text);
 };
+window._onSpeechEvent = function(ev) {
+  const map = {
+    ready: '🎙 第1步：识别器就绪，请说话…',
+    begin: '🎙 第2步：听到声音了，正在听…',
+    end: '🎙 第3步：说话结束，识别中…'
+  };
+  if (!map[ev]) return;
+  addMessage(map[ev], 'her');
+  if (ev === 'end') {
+    // If no result/error within 8s after speech ends, the recognizer is stuck
+    speechStageTimer = setTimeout(() => {
+      if (listening) {
+        listening = false;
+        document.getElementById('micBtn').classList.remove('listening');
+        addMessage('🎙 第4步失败：说话结束后识别器一直没有返回结果（卡住了）。这通常说明系统识别服务有问题。请截图发给爸爸。', 'her');
+      }
+    }, 8000);
+  }
+};
 window._onSpeechError = function(code) {
+  if (speechStageTimer) { clearTimeout(speechStageTimer); speechStageTimer = null; }
   document.getElementById('micBtn').classList.remove('listening');
   listening = false;
   const reasons = {
@@ -1274,6 +1296,11 @@ async function init() {
   }
 
   checkGreeting();
+
+  // In the Android app, show speech-engine diagnostics once at startup
+  if (window.AndroidBridge) {
+    try { addMessage('🔧 诊断信息：' + AndroidBridge.getRecognizerInfo(), 'her'); } catch (e) {}
+  }
 }
 
 init().catch(err => {

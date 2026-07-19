@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.speech.RecognitionListener;
+import android.speech.RecognitionService;
 import android.speech.tts.TextToSpeech;
 import android.webkit.WebView;
 import android.webkit.WebSettings;
@@ -14,8 +15,10 @@ import android.webkit.PermissionRequest;
 import android.webkit.JavascriptInterface;
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import java.util.Locale;
 import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends Activity {
     private WebView webView;
@@ -72,11 +75,11 @@ public class MainActivity extends Activity {
             @Override public void onError(int error) {
                 notifySpeechError(error);
             }
-            @Override public void onReadyForSpeech(Bundle params) {}
-            @Override public void onBeginningOfSpeech() {}
+            @Override public void onReadyForSpeech(Bundle params) { notifySpeechEvent("ready"); }
+            @Override public void onBeginningOfSpeech() { notifySpeechEvent("begin"); }
             @Override public void onRmsChanged(float rmsdB) {}
             @Override public void onBufferReceived(byte[] buffer) {}
-            @Override public void onEndOfSpeech() {}
+            @Override public void onEndOfSpeech() { notifySpeechEvent("end"); }
             @Override public void onPartialResults(Bundle results) {}
             @Override public void onEvent(int eventType, Bundle params) {}
         };
@@ -94,6 +97,23 @@ public class MainActivity extends Activity {
 
             @JavascriptInterface
             public boolean hasRecognizer() { return recognitionAvailable; }
+
+            @JavascriptInterface
+            public String getRecognizerInfo() {
+                StringBuilder sb = new StringBuilder();
+                sb.append("识别服务可用:").append(recognitionAvailable);
+                List<ResolveInfo> services = getPackageManager().queryIntentServices(
+                    new Intent(RecognitionService.SERVICE_INTERFACE), 0);
+                sb.append(" | 识别引擎:");
+                if (services.isEmpty()) {
+                    sb.append("(系统里没有!)");
+                } else {
+                    for (ResolveInfo r : services) sb.append(r.serviceInfo.packageName).append(' ');
+                }
+                sb.append("| 录音权限:").append(
+                    checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED ? "已允许" : "未允许");
+                return sb.toString();
+            }
 
             @JavascriptInterface
             public boolean startListening() {
@@ -142,6 +162,11 @@ public class MainActivity extends Activity {
     private void notifySpeechError(int code) {
         webView.post(() -> webView.evaluateJavascript(
             "if(window._onSpeechError) window._onSpeechError(" + code + ")", null));
+    }
+
+    private void notifySpeechEvent(String ev) {
+        webView.post(() -> webView.evaluateJavascript(
+            "if(window._onSpeechEvent) window._onSpeechEvent('" + ev + "')", null));
     }
 
     @Override
