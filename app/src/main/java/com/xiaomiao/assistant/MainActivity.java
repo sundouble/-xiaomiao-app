@@ -170,6 +170,16 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_RECORD) {
+            final boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            webView.post(() -> webView.evaluateJavascript(
+                "if(window._onPermissionResult) window._onPermissionResult(" + granted + ")", null));
+        }
+    }
+
+    @Override
     protected void onDestroy() {
         if (tts != null) { tts.stop(); tts.shutdown(); }
         if (recognizer != null) { recognizer.destroy(); }

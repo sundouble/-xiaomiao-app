@@ -1117,6 +1117,13 @@ window._onSpeechEvent = function(ev) {
     }, 8000);
   }
 };
+window._onPermissionResult = function(granted) {
+  if (granted) {
+    addMessage('✅ 麦克风权限已经允许啦！再按一次麦克风说话吧', 'her');
+  } else {
+    addMessage('🎤 麦克风权限还是没有拿到。请爸爸到 Pad 的 设置 → 应用和服务 → 应用管理 → 小喵 → 权限 → 麦克风，手动选"允许"，然后重启小喵。', 'her');
+  }
+};
 window._onSpeechError = function(code) {
   if (speechStageTimer) { clearTimeout(speechStageTimer); speechStageTimer = null; }
   document.getElementById('micBtn').classList.remove('listening');
