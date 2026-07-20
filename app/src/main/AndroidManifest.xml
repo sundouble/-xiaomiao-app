@@ -8,6 +8,8 @@
     <application
         android:allowBackup="true"
         android:label="小喵"
+        android:icon="@drawable/ic_launcher"
+        android:roundIcon="@drawable/ic_launcher"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true">
         <activity

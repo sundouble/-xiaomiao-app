@@ -135,6 +135,7 @@ public class MainActivity extends Activity {
     }
 
     private void startRecording() {
+        if (tts != null) tts.stop(); // stop speaking so the child can talk
         stopAudioRecord();
         pcmData = new ByteArrayOutputStream();
         int bufSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);

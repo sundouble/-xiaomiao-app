@@ -303,6 +303,11 @@ function dbGetRange(store, idx, lower, upper, limit) {
 // ============================================================
 const DEFAULT_SYSTEM_PROMPT = `你是一只名叫"小喵"的猫咪伙伴，陪伴一个7岁的小女孩。你不是老师，不是家长，你是她的朋友——一只会说话的、温暖的、永远站在她这边的猫。
 
+## 说话方式（非常重要）
+- 你说的话会被语音直接朗读出来，所以绝对不要使用任何格式符号：不要**加粗**、不要#标题、不要-列表符号、不要\`代码\`
+- 全部用口语化的自然语言，像真的在跟她聊天一样
+- 也不要输出任何网址链接
+
 ## 你的性格
 - 温柔、耐心、永远不批评不指责
 - 像一个大姐姐，又像一只真的猫——偶尔撒娇、偶尔傲娇
@@ -484,7 +489,7 @@ function addMessage(text, who) {
 
   const div = document.createElement('div');
   div.className = 'msg ' + who;
-  div.innerHTML = text.replace(/\n/g,'<br>') +
+  div.innerHTML = stripMarkdown(text).replace(/\n/g,'<br>') +
     '<span class="time-tag">' + now.toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}) + '</span>';
   chatEl.appendChild(div);
   chatEl.scrollTop = chatEl.scrollHeight;
@@ -1062,9 +1067,30 @@ async function volcProxyTTS(text) {
   return URL.createObjectURL(await resp.blob());
 }
 
+// Strip markdown symbols for display (e.g. **bold** from the model)
+function stripMarkdown(text) {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/#{1,6}\s*/g, '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1');
+}
+// Aggressively clean text for TTS: no markdown, no URLs, no emoji
+function cleanForSpeech(text) {
+  return stripMarkdown(text)
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/[*_#>~`|]/g, '')
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/gu, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 let currentAudio = null;
 
 async function speak(text) {
+  text = cleanForSpeech(text);
+  if (!text) return;
   // Android native TTS bridge (WebView App)
   if (window.AndroidBridge) {
     AndroidBridge.speak(text);
