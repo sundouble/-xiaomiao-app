@@ -14,6 +14,15 @@ android {
         versionName "1.0"
     }
 
+    signingConfigs {
+        debug {
+            storeFile rootProject.file('xiaomiao.keystore')
+            storePassword 'xiaomiao123'
+            keyAlias 'xiaomiao'
+            keyPassword 'xiaomiao123'
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
