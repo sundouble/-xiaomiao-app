@@ -36,8 +36,7 @@ public class MainActivity extends Activity {
     private static final int REQ_RECORD = 1001;
 
     // Volcengine ASR
-    private String volcAppId = "";
-    private String volcAccessToken = "";
+    private String volcApiKey = "";
     private AudioRecord audioRecord;
     private Thread recordThread;
     private volatile boolean recording = false;
@@ -92,13 +91,12 @@ public class MainActivity extends Activity {
             public boolean isSpeaking() { return tts.isSpeaking(); }
 
             @JavascriptInterface
-            public void setVolcConfig(String appId, String accessToken) {
-                volcAppId = appId == null ? "" : appId.trim();
-                volcAccessToken = accessToken == null ? "" : accessToken.trim();
+            public void setVolcApiKey(String key) {
+                volcApiKey = key == null ? "" : key.trim();
             }
             @JavascriptInterface
             public boolean hasVolcConfig() {
-                return !volcAppId.isEmpty() && !volcAccessToken.isEmpty();
+                return !volcApiKey.isEmpty();
             }
 
             @JavascriptInterface
@@ -223,8 +221,7 @@ public class MainActivity extends Activity {
                 conn.setReadTimeout(20000);
                 conn.setDoOutput(true);
                 conn.setRequestProperty("Content-Type", "application/json");
-                conn.setRequestProperty("X-Api-App-Key", volcAppId);
-                conn.setRequestProperty("X-Api-Access-Key", volcAccessToken);
+                conn.setRequestProperty("X-Api-Key", volcApiKey);
                 conn.setRequestProperty("X-Api-Resource-Id", "volc.bigasr.auc_turbo");
                 conn.setRequestProperty("X-Api-Request-Id", UUID.randomUUID().toString());
                 conn.setRequestProperty("X-Api-Sequence", "-1");
@@ -243,6 +240,8 @@ public class MainActivity extends Activity {
                     String text = result == null ? "" : result.optString("text", "").trim();
                     if (!text.isEmpty()) notifyResult(text);
                     else notifyAsrFail("没有识别出文字，再说一次？");
+                } else if ("20000003".equals(statusCode)) {
+                    notifyAsrFail("没有听清你的声音，大声一点再说一次？");
                 } else {
                     String msg = conn.getHeaderField("X-Api-Message");
                     if (msg == null || msg.isEmpty()) msg = resp.substring(0, Math.min(150, resp.length()));

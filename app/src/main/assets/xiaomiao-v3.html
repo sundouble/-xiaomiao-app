@@ -193,10 +193,8 @@ body {
       <option value="volcengine">火山引擎（需填下方凭证）</option>
     </select>
     <div id="volcFields" style="display:none;">
-      <label style="margin-top:4px;">App ID（火山引擎，语音识别/合成都要用）</label>
-      <input type="text" id="volcAppId" placeholder="火山引擎应用 App ID">
-      <label style="margin-top:4px;">Access Token</label>
-      <input type="password" id="volcAccessToken" placeholder="火山引擎 Access Token">
+      <label style="margin-top:4px;">火山引擎 API Key（语音识别/合成都要用）</label>
+      <input type="password" id="volcApiKey" placeholder="火山引擎语音服务的 API Key">
       <label style="margin-top:4px;">音色</label>
       <select id="volcVoice" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px;font-size:.82rem;font-family:inherit;">
         <option value="zh_female_qingxin">清新女声</option>
@@ -905,6 +903,7 @@ let allVoices = [];
 let ttsMode = 'browser'; // 'browser' or 'volcengine'
 let _volcAppId = '';
 let _volcAccessToken = '';
+let _volcApiKey = '';
 let _volcVoice = 'zh_female_qingxin';
 
 function scanVoices() {
@@ -1049,8 +1048,8 @@ function switchTTSProvider() {
 }
 
 async function volcProxyTTS(text) {
-  const appId = document.getElementById('volcAppId')?.value?.trim() || _volcAppId;
-  const accessToken = document.getElementById('volcAccessToken')?.value?.trim() || _volcAccessToken;
+  const appId = _volcAppId;
+  const accessToken = _volcAccessToken;
   const voice = document.getElementById('volcVoice')?.value || _volcVoice;
   if (!appId || !accessToken) throw new Error('火山引擎凭证未配置');
 
@@ -1189,7 +1188,7 @@ function toggleMic() {
   if (window.AndroidBridge) {
     if (recognizing) return; // still waiting for previous recognition
     if (!AndroidBridge.hasVolcConfig()) {
-      addMessage('🎤 语音识别需要先配置火山引擎凭证：请爸爸点小喵头像 → 输入密码2580 → 在设置里填入火山引擎的 App ID 和 Access Token → 保存，然后再试。', 'her');
+      addMessage('🎤 语音识别需要先配置火山引擎：请爸爸点小喵头像 → 输入密码2580 → 在设置里填入火山引擎的 API Key → 保存，然后再试。', 'her');
       return;
     }
     if (listening) {
@@ -1227,8 +1226,7 @@ async function openSettings() {
   // TTS
   ttsMode = await getSetting('ttsMode', 'browser');
   document.getElementById('ttsProvider').value = ttsMode;
-  document.getElementById('volcAppId').value = await getSetting('volcAppId', '');
-  document.getElementById('volcAccessToken').value = await getSetting('volcAccessToken', '');
+  document.getElementById('volcApiKey').value = await getSetting('volcApiKey', '');
   document.getElementById('volcVoice').value = await getSetting('volcVoice', 'zh_female_qingxin');
   switchTTSProvider();
   populateVoiceList();
@@ -1246,14 +1244,12 @@ async function saveSettings() {
   await setSetting('systemPrompt', document.getElementById('systemPrompt').value.trim());
   // TTS
   await setSetting('ttsMode', ttsMode);
-  _volcAppId = document.getElementById('volcAppId').value.trim();
-  _volcAccessToken = document.getElementById('volcAccessToken').value.trim();
+  _volcApiKey = document.getElementById('volcApiKey').value.trim();
   _volcVoice = document.getElementById('volcVoice').value;
-  await setSetting('volcAppId', _volcAppId);
-  await setSetting('volcAccessToken', _volcAccessToken);
+  await setSetting('volcApiKey', _volcApiKey);
   await setSetting('volcVoice', _volcVoice);
   if (window.AndroidBridge) {
-    try { AndroidBridge.setVolcConfig(_volcAppId, _volcAccessToken); } catch (e) {}
+    try { AndroidBridge.setVolcApiKey(_volcApiKey); } catch (e) {}
   }
   await setSetting('voiceName', personaVoice ? personaVoice.name : '');
   closeSettings();
@@ -1316,11 +1312,10 @@ async function init() {
   }
   selectBestVoice();
   ttsMode = await getSetting('ttsMode', 'browser');
-  _volcAppId = await getSetting('volcAppId', '');
-  _volcAccessToken = await getSetting('volcAccessToken', '');
+  _volcApiKey = await getSetting('volcApiKey', '');
   _volcVoice = await getSetting('volcVoice', 'zh_female_qingxin');
   if (window.AndroidBridge) {
-    try { AndroidBridge.setVolcConfig(_volcAppId, _volcAccessToken); } catch (e) {}
+    try { AndroidBridge.setVolcApiKey(_volcApiKey); } catch (e) {}
   }
 
   // Check if API is configured
