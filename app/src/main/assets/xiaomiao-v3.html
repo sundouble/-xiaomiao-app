@@ -215,6 +215,9 @@ body {
     <label>系统提示词（定义小喵的性格）</label>
     <textarea id="systemPrompt"></textarea>
     <button class="btn btn-outline" onclick="resetSystemPrompt()" style="margin-top:4px;font-size:.75rem;">恢复默认提示词</button>
+    <label style="margin-top:8px;">小喵的长期记忆卡（每聊10条自动整理，家长可查看）</label>
+    <textarea id="memoryCardView" readonly style="height:90px;font-size:.78rem;background:#f5f5f5;color:#555;"></textarea>
+    <button class="btn btn-outline" onclick="clearMemoryCard()" style="margin-top:4px;font-size:.75rem;">🗑 清空长期记忆</button>
     <div class="btn-row">
       <button class="btn btn-primary" onclick="saveSettings()">保存</button>
       <button class="btn btn-outline" onclick="closeSettings()">取消</button>
@@ -742,8 +745,11 @@ async function callAPI(userMessage) {
   }
 
   // Build conversation history in parallel with search
-  const recentConvs = await dbGetRange('conversations', 'timestamp', 0, Date.now(), 20);
+  const recentConvs = await dbGetRange('conversations', 'timestamp', 0, Date.now(), 200);
   recentConvs.reverse();
+
+  // Long-term memory card: auto-maintained summary of everything known about the child
+  const memoryCard = await getSetting('memoryCard', '');
 
   // Wait for search with a 3-second deadline
   let searchResult = null;
@@ -768,8 +774,11 @@ async function callAPI(userMessage) {
   // Add persona-specific instructions
   const personaAddon = PERSONAS[currentPersona].systemAddon;
 
+  const memorySection = memoryCard
+    ? '\n\n[你记住的关于她的事——这是长期记忆，自然地用在聊天里，不要说"我记得"太刻意]\n' + memoryCard
+    : '';
   const messages = [
-    { role: 'system', content: sysPrompt + '\n\n' + dateContext + '\n\n' + personaAddon },
+    { role: 'system', content: sysPrompt + '\n\n' + dateContext + '\n\n' + personaAddon + memorySection },
   ];
 
   // Add relevant conversation history
@@ -821,6 +830,52 @@ async function callAPI(userMessage) {
 }
 
 // ============================================================
+// LONG-TERM MEMORY CARD
+// ============================================================
+let memUpdating = false;
+async function maybeUpdateMemory() {
+  if (memUpdating) return;
+  const count = parseInt(await getSetting('memMsgCount', '0')) + 1;
+  await setSetting('memMsgCount', String(count));
+  if (count < 10) return;
+  memUpdating = true;
+  try {
+    await setSetting('memMsgCount', '0');
+    const apiUrl = await getSetting('apiUrl', DEFAULT_API_URL);
+    const apiKey = await getSetting('apiKey', '');
+    const model = await getSetting('modelName', DEFAULT_MODEL);
+    if (!apiKey) return;
+    const oldCard = await getSetting('memoryCard', '');
+    const recent = await dbGetRange('conversations', 'timestamp', 0, Date.now(), 20);
+    recent.reverse();
+    const convoText = recent.map(m => (m.role === 'user' ? '孩子: ' : '小喵: ') + m.text).join('\n');
+    const resp = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: '你是记忆整理助手。根据"已有的记忆卡"和"最近的对话"，输出更新后的记忆卡。规则：1) 只保留对长期陪伴这个小女孩有用的信息：喜好、厌恶、习惯、家人朋友、宠物、学校生活、最近的重要事件、情绪特点、她的目标和进步；2) 删除过时的信息，合并重复的；3) 简短中文要点，每条一行，最多15条；4) 只输出记忆卡内容，不要任何解释或标题。' },
+          { role: 'user', content: '【已有的记忆卡】\n' + (oldCard || '（空）') + '\n\n【最近的对话】\n' + convoText }
+        ],
+        temperature: 0.3,
+        max_tokens: 800,
+        stream: false,
+      }),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      const card = (data.choices[0].message.content || '').trim();
+      if (card) await setSetting('memoryCard', card);
+    }
+  } catch (e) {
+    console.error('memory update failed', e);
+  } finally {
+    memUpdating = false;
+  }
+}
+
+// ============================================================
 // CHILD INTERACTION
 // ============================================================
 async function childSay(text) {
@@ -859,6 +914,7 @@ async function _childSay(text) {
     addMessage(safeReply, 'her');
     await dbPut('conversations', { timestamp: Date.now(), role:'assistant', text: safeReply });
     speak(safeReply);
+    maybeUpdateMemory(); // fire-and-forget: maintain long-term memory card
     avatar.classList.add('speaking');
     setTimeout(() => avatar.classList.remove('speaking'), 2000);
   } catch (err) {
@@ -1254,12 +1310,19 @@ async function openSettings() {
   document.getElementById('ttsProvider').value = ttsMode;
   document.getElementById('volcApiKey').value = await getSetting('volcApiKey', '');
   document.getElementById('volcVoice').value = await getSetting('volcVoice', 'zh_female_qingxin');
+  document.getElementById('memoryCardView').value = await getSetting('memoryCard', '') || '（还没有积累记忆，聊几天就会有了）';
   switchTTSProvider();
   populateVoiceList();
   document.getElementById('settingsOverlay').classList.add('show');
 }
 function closeSettings() { document.getElementById('settingsOverlay').classList.remove('show'); }
 function resetSystemPrompt() { document.getElementById('systemPrompt').value = DEFAULT_SYSTEM_PROMPT; }
+async function clearMemoryCard() {
+  await setSetting('memoryCard', '');
+  await setSetting('memMsgCount', '0');
+  document.getElementById('memoryCardView').value = '';
+  showToast('长期记忆已清空');
+}
 
 async function saveSettings() {
   await setSetting('apiUrl', document.getElementById('apiUrl').value.trim());
