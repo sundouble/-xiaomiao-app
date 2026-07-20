@@ -43,10 +43,10 @@ public class MainActivity extends Activity {
     private ByteArrayOutputStream pcmData;
 
     private static final int SAMPLE_RATE = 16000;
-    private static final int MAX_RECORD_MS = 15000;
-    private static final int SILENCE_STOP_MS = 1500;
-    private static final int NO_SPEECH_MS = 6000;
-    private static final int SOUND_THRESHOLD = 800;
+    private static final int MAX_RECORD_MS = 30000;
+    private static final int SILENCE_STOP_MS = 3000;
+    private static final int NO_SPEECH_MS = 8000;
+    private static final int SOUND_THRESHOLD = 400;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
